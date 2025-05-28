@@ -46,15 +46,17 @@ public abstract class HttpOptions extends JsonSerializable {
   @JsonProperty("timeout")
   public abstract Optional<Integer> timeout();
 
-  /** Instantiates a builder for HttpOptions. */
+  public abstract Optional<String> proxyHost();
+  public abstract Optional<Integer> proxyPort();
+  public abstract Optional<String> proxyUser();
+  public abstract Optional<String> proxyPassword();
+
   public static Builder builder() {
     return new AutoValue_HttpOptions.Builder();
   }
 
-  /** Creates a builder with the same values as this instance. */
   public abstract Builder toBuilder();
 
-  /** Builder for HttpOptions. */
   @AutoValue.Builder
   public abstract static class Builder {
     /** For internal usage. Please use `HttpOptions.builder()` for instantiation. */
@@ -65,17 +67,55 @@ public abstract class HttpOptions extends JsonSerializable {
 
     @JsonProperty("baseUrl")
     public abstract Builder baseUrl(String baseUrl);
+    public abstract Builder baseUrl(Optional<String> baseUrl);
 
     @JsonProperty("apiVersion")
     public abstract Builder apiVersion(String apiVersion);
+    public abstract Builder apiVersion(Optional<String> apiVersion);
 
     @JsonProperty("headers")
     public abstract Builder headers(Map<String, String> headers);
+    public abstract Builder headers(Optional<Map<String,String>> headers);
 
     @JsonProperty("timeout")
     public abstract Builder timeout(Integer timeout);
+    public abstract Builder timeout(Optional<Integer> timeout);
 
-    public abstract HttpOptions build();
+    public abstract Builder proxyHost(String proxyHost);
+    public abstract Builder proxyHost(Optional<String> proxyHost);
+
+    public abstract Builder proxyUser(String proxyUser);
+    public abstract Builder proxyUser(Optional<String> proxyUser);
+
+    public abstract Builder proxyPassword(String proxyPassword);
+    public abstract Builder proxyPassword(Optional<String> proxyPassword);
+
+    public abstract Builder proxyPort(Integer proxyPort);
+    public abstract Builder proxyPort(Optional<Integer> proxyPort);
+
+    abstract Optional<String> proxyHost();
+    abstract Optional<Integer> proxyPort();
+
+    abstract HttpOptions autoBuild();
+
+    public HttpOptions build() {
+      Optional<String> currentProxyHost = proxyHost();
+      Optional<Integer> currentProxyPort = proxyPort();
+
+      if (currentProxyHost.isPresent() && !currentProxyPort.isPresent()) {
+        throw new IllegalStateException("proxyPort must be set if proxyHost is set.");
+      }
+      if (!currentProxyHost.isPresent() && currentProxyPort.isPresent()) {
+        throw new IllegalStateException("proxyHost must be set if proxyPort is set.");
+      }
+      if (currentProxyPort.isPresent()) {
+        int port = currentProxyPort.get();
+        if (port <= 0 || port > 65535) {
+          throw new IllegalArgumentException("proxyPort must be between 1 and 65535 if set.");
+        }
+      }
+      return autoBuild();
+    }
   }
 
   /** Deserializes a JSON string to a HttpOptions object. */

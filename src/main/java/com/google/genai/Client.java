@@ -90,17 +90,42 @@ public final class Client implements AutoCloseable {
     private Optional<DebugConfig> debugConfig = Optional.empty();
     private Optional<Map<String, String>> environmentVariables = Optional.empty();
 
+    private Optional<String> clientBuilderProxyHost = Optional.empty();
+    private Optional<Integer> clientBuilderProxyPort = Optional.empty();
+
+    private Optional<String> clientBuilderProxyUser = Optional.empty();
+    private Optional<String> clientBuilderProxyPassword = Optional.empty();
+
+
     /** Builds the {@link Client} instance. */
     public Client build() {
+      Optional<HttpOptions> finalHttpOptionsToPass = Optional.empty();
+
+      if (this.httpOptions.isPresent() || this.clientBuilderProxyHost.isPresent() || this.clientBuilderProxyPort.isPresent()) {
+        HttpOptions.Builder optionsBuilder;
+        if (this.httpOptions.isPresent()) {
+          optionsBuilder = this.httpOptions.get().toBuilder();
+        } else {
+          optionsBuilder = HttpOptions.builder();
+        }
+
+        this.clientBuilderProxyHost.ifPresent(optionsBuilder::proxyHost);
+        this.clientBuilderProxyPort.ifPresent(optionsBuilder::proxyPort);
+        this.clientBuilderProxyUser.ifPresent(optionsBuilder::proxyUser);
+        this.clientBuilderProxyPassword.ifPresent(optionsBuilder::proxyPassword);
+
+        finalHttpOptionsToPass = Optional.of(optionsBuilder.build());
+      }
+
       return new Client(
-          apiKey,
-          project,
-          location,
-          credentials,
-          httpOptions,
-          vertexAI,
-          debugConfig,
-          environmentVariables);
+              apiKey,
+              project,
+              location,
+              credentials,
+              finalHttpOptionsToPass,
+              vertexAI,
+              debugConfig,
+              environmentVariables);
     }
 
     /** Sets the API key for Gemini API. */
@@ -157,6 +182,30 @@ public final class Client implements AutoCloseable {
     /** Sets the environment variables for the API client. This is for internal use only. */
     Builder environmentVariables(Map<String, String> environmentVariables) {
       this.environmentVariables = Optional.of(environmentVariables);
+      return this;
+    }
+
+    public Builder proxyHost(String proxyHost) {
+      checkNotNull(proxyHost, "proxyHost cannot be null");
+      if (proxyHost.isEmpty()) throw new IllegalArgumentException("proxyHost cannot be empty");
+      this.clientBuilderProxyHost = Optional.of(proxyHost);
+      return this;
+    }
+
+    public Builder proxyPort(int proxyPort) {
+      this.clientBuilderProxyPort = Optional.of(proxyPort);
+      return this;
+    }
+
+    public Builder proxyUser(String proxyUser) {
+      checkNotNull(proxyUser, "proxyUser cannot be null");
+      this.clientBuilderProxyUser = Optional.of(proxyUser);
+      return this;
+    }
+
+    public Builder proxyPassword(String proxyPassword) {
+      checkNotNull(proxyPassword, "proxyPassword cannot be null");
+      this.clientBuilderProxyPassword = Optional.of(proxyPassword);
       return this;
     }
   }

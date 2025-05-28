@@ -27,10 +27,15 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.HttpClients;
 import org.jspecify.annotations.Nullable;
 
 /** Interface for an API client which issues HTTP requests to the GenAI APIs. */
@@ -71,7 +76,7 @@ abstract class ApiClient {
       this.httpOptions = mergeHttpOptions(customHttpOptions.get());
     }
 
-    this.httpClient = createHttpClient(httpOptions.timeout());
+    this.httpClient = createHttpClient(this.httpOptions);
   }
 
   ApiClient(
@@ -117,18 +122,42 @@ abstract class ApiClient {
     }
     this.apiKey = Optional.empty();
     this.vertexAI = true;
-    this.httpClient = createHttpClient(httpOptions.timeout());
+    this.httpClient = createHttpClient(this.httpOptions);
   }
 
-  private CloseableHttpClient createHttpClient(Optional<Integer> timeout) {
-    if (!timeout.isPresent()) {
-      return HttpClients.createDefault();
+  private CloseableHttpClient createHttpClient(HttpOptions currentHttpOptions) {
+    HttpClientBuilder clientBuilder = HttpClientBuilder.create();
+    RequestConfig.Builder configBuilder = RequestConfig.custom();
+
+    if (currentHttpOptions.timeout().isPresent()) {
+      configBuilder.setConnectTimeout(currentHttpOptions.timeout().get());
+      configBuilder.setSocketTimeout(currentHttpOptions.timeout().get());
+      configBuilder.setConnectionRequestTimeout(currentHttpOptions.timeout().get());
     }
-    RequestConfig config =
-        RequestConfig.custom()
-            .setConnectTimeout(timeout.get())
-            .build();
-    return HttpClientBuilder.create().setDefaultRequestConfig(config).build();
+
+    if (currentHttpOptions.proxyHost().isPresent() && currentHttpOptions.proxyPort().isPresent()) {
+      String pHost = currentHttpOptions.proxyHost().get();
+      Integer pPort = currentHttpOptions.proxyPort().get();
+      HttpHost proxy = new HttpHost(pHost, pPort);
+      configBuilder.setProxy(proxy);
+      System.out.println("ApiClient: Using proxy: " + pHost + ":" + pPort);
+
+      if (currentHttpOptions.proxyUser().isPresent() && currentHttpOptions.proxyPassword().isPresent()) {
+        String proxyUser = currentHttpOptions.proxyUser().get();
+        String proxyPassword = currentHttpOptions.proxyPassword().get();
+
+        CredentialsProvider credsProvider = new BasicCredentialsProvider();
+        credsProvider.setCredentials(
+                new AuthScope(pHost, pPort),
+                new UsernamePasswordCredentials(proxyUser, proxyPassword)
+        );
+        clientBuilder.setDefaultCredentialsProvider(credsProvider);
+        System.out.println("ApiClient: Using proxy authentication for user: " + proxyUser);
+      }
+    }
+
+    clientBuilder.setDefaultRequestConfig(configBuilder.build());
+    return clientBuilder.build();
   }
 
   /** Sends a Http request given the http method, path, and request json string. */
@@ -191,30 +220,37 @@ abstract class ApiClient {
     if (httpOptionsToApply == null) {
       return this.httpOptions;
     }
+
     HttpOptions.Builder mergedHttpOptionsBuilder = this.httpOptions.toBuilder();
-    if (httpOptionsToApply.baseUrl().isPresent()) {
-      mergedHttpOptionsBuilder.baseUrl(httpOptionsToApply.baseUrl().get());
-    }
-    if (httpOptionsToApply.apiVersion().isPresent()) {
-      mergedHttpOptionsBuilder.apiVersion(httpOptionsToApply.apiVersion().get());
-    }
-    if (httpOptionsToApply.timeout().isPresent()) {
-      mergedHttpOptionsBuilder.timeout(httpOptionsToApply.timeout().get());
-    }
-    if (httpOptionsToApply.headers().isPresent()) {
+
+    httpOptionsToApply.baseUrl().ifPresent(mergedHttpOptionsBuilder::baseUrl);
+    httpOptionsToApply.apiVersion().ifPresent(mergedHttpOptionsBuilder::apiVersion);
+    httpOptionsToApply.timeout().ifPresent(mergedHttpOptionsBuilder::timeout);
+
+    httpOptionsToApply.proxyHost().ifPresent(mergedHttpOptionsBuilder::proxyHost);
+    httpOptionsToApply.proxyPort().ifPresent(mergedHttpOptionsBuilder::proxyPort);
+
+    if (httpOptionsToApply.headers().isPresent() || this.httpOptions.headers().isPresent() || getTimeoutHeader(httpOptionsToApply).isPresent() ) {
       Stream<Map.Entry<String, String>> headersStream =
-          Stream.concat(
               Stream.concat(
-                  this.httpOptions.headers().orElse(ImmutableMap.of()).entrySet().stream(),
-                  getTimeoutHeader(httpOptionsToApply)
-                      .orElse(ImmutableMap.of())
-                      .entrySet()
-                      .stream()),
-              httpOptionsToApply.headers().orElse(ImmutableMap.of()).entrySet().stream());
+                      this.httpOptions.headers().orElse(ImmutableMap.of()).entrySet().stream(),
+                      Stream.concat(
+                              getTimeoutHeader(httpOptionsToApply)
+                                      .orElse(ImmutableMap.of())
+                                      .entrySet()
+                                      .stream(),
+                              httpOptionsToApply.headers().orElse(ImmutableMap.of()).entrySet().stream()));
       Map<String, String> mergedHeaders =
-          headersStream.collect(
-              toImmutableMap(Map.Entry::getKey, Map.Entry::getValue, (val1, val2) -> val2));
-      mergedHttpOptionsBuilder.headers(mergedHeaders);
+              headersStream.collect(
+                      toImmutableMap(Map.Entry::getKey, Map.Entry::getValue, (val1, val2) -> val2));
+
+      if (!mergedHeaders.isEmpty()) {
+        mergedHttpOptionsBuilder.headers(mergedHeaders);
+      } else {
+        if (httpOptionsToApply.headers().isPresent() && httpOptionsToApply.headers().get().isEmpty()){
+          mergedHttpOptionsBuilder.headers(ImmutableMap.of());
+        }
+      }
     }
     return mergedHttpOptionsBuilder.build();
   }
