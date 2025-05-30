@@ -1,3 +1,62 @@
+# java-genai Fork (by ensodai)
+
+This is a fork of the [Google Generative AI Java SDK](https://github.com/google/java-generativeai).
+
+This fork addresses specific issues related to:
+1.  **Proxy Authentication:** Provides a working setup for HTTP/HTTPS proxy with username/password authentication.
+2.  **Android Compatibility:** Aims to resolve issues encountered with the original SDK's Apache HttpClient on Android, ensuring smoother operation.
+
+## Installation (Gradle via JitPack)
+
+1.  Add JitPack to your root `build.gradle` (or `settings.gradle` for newer Android Studio versions):
+    ```gradle
+    // settings.gradle
+    dependencyResolutionManagement {
+        repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+        repositories {
+            google()
+            mavenCentral()
+            maven { url 'https://jitpack.io' } // JitPack repository
+        }
+    }
+    ```
+    Or for older projects, in your root `build.gradle`:
+    ```gradle
+    allprojects {
+        repositories {
+            // ... other repositories
+            maven { url 'https://jitpack.io' }
+        }
+    }
+    ```
+
+2.  Add the dependency to your module's `build.gradle`:
+    ```gradle
+    dependencies {
+        implementation 'com.github.ensodai:java-genai:LATEST_RELEASE'
+    }
+    ```
+
+## Proxy Configuration Example
+
+To use an HTTP/HTTPS proxy with authentication:
+
+```java
+String apiKey = "YOUR_GOOGLE_API_KEY";
+String proxyHost = "your.proxy.server.com";
+int proxyPort = 8888;
+String proxyUser = "your_proxy_user";
+String proxyPassword = "your_proxy_password";
+
+Client client = Client.builder()
+        .apiKey(apiKey)
+        .proxyHost(proxyHost)
+        .proxyPort(proxyPort)
+        .proxyUser(proxyUser)
+        .proxyPassword(proxyPassword)
+        .build();
+```
+
 # Google Gen AI Java SDK
 
 Java idiomatic SDK for the
