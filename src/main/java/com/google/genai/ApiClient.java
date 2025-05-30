@@ -140,7 +140,6 @@ abstract class ApiClient {
       Integer pPort = currentHttpOptions.proxyPort().get();
       HttpHost proxy = new HttpHost(pHost, pPort);
       configBuilder.setProxy(proxy);
-      System.out.println("ApiClient: Using proxy: " + pHost + ":" + pPort);
 
       if (currentHttpOptions.proxyUser().isPresent() && currentHttpOptions.proxyPassword().isPresent()) {
         String proxyUser = currentHttpOptions.proxyUser().get();
@@ -152,7 +151,6 @@ abstract class ApiClient {
                 new UsernamePasswordCredentials(proxyUser, proxyPassword)
         );
         clientBuilder.setDefaultCredentialsProvider(credsProvider);
-        System.out.println("ApiClient: Using proxy authentication for user: " + proxyUser);
       }
     }
 
@@ -221,7 +219,7 @@ abstract class ApiClient {
       return this.httpOptions;
     }
 
-    HttpOptions.Builder mergedHttpOptionsBuilder = this.httpOptions.toBuilder();
+    HttpOptions.Builder mergedHttpOptionsBuilder = defaultHttpOptions(this.vertexAI, this.location).toBuilder();
 
     httpOptionsToApply.baseUrl().ifPresent(mergedHttpOptionsBuilder::baseUrl);
     httpOptionsToApply.apiVersion().ifPresent(mergedHttpOptionsBuilder::apiVersion);
@@ -229,11 +227,13 @@ abstract class ApiClient {
 
     httpOptionsToApply.proxyHost().ifPresent(mergedHttpOptionsBuilder::proxyHost);
     httpOptionsToApply.proxyPort().ifPresent(mergedHttpOptionsBuilder::proxyPort);
+    httpOptionsToApply.proxyUser().ifPresent(mergedHttpOptionsBuilder::proxyUser);
+    httpOptionsToApply.proxyPassword().ifPresent(mergedHttpOptionsBuilder::proxyPassword);
 
-    if (httpOptionsToApply.headers().isPresent() || this.httpOptions.headers().isPresent() || getTimeoutHeader(httpOptionsToApply).isPresent() ) {
+    if (httpOptionsToApply.headers().isPresent() || defaultHttpOptions(this.vertexAI, this.location).headers().isPresent() || getTimeoutHeader(httpOptionsToApply).isPresent() ) {
       Stream<Map.Entry<String, String>> headersStream =
               Stream.concat(
-                      this.httpOptions.headers().orElse(ImmutableMap.of()).entrySet().stream(),
+                      defaultHttpOptions(this.vertexAI, this.location).headers().orElse(ImmutableMap.of()).entrySet().stream(),
                       Stream.concat(
                               getTimeoutHeader(httpOptionsToApply)
                                       .orElse(ImmutableMap.of())
